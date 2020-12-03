@@ -1,0 +1,216 @@
+/* -----------------------------------------------------------------------------
+ * analog_input.h - Interface for sampling ADC0 via DMA0 at ADC_SAMPLING_FREQ  
+ *
+ * @author  Jake Michael
+ * @date    2020-11-23
+ * @rev     1.2
+ * -----------------------------------------------------------------------------
+ */
+
+#include <stdio.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include "MKL25Z4.h"
+#include "analog_input.h"
+
+#define ADC_SAMPLING_FREQ  (48000U) // in Hz
+#define ADC_MAX_SIZE         (256)
+
+static uint16_t adc_samplesA[ADC_MAX_SIZE];
+static uint16_t adc_samplesB[ADC_MAX_SIZE];
+static bool     is_adc_samplesA_active;
+static bool     adc_sampling_hold_flag;
+
+// see .h for more details
+void ain_init() {
+  _init_dma0();
+  _init_tpm1();
+  _init_adc0();
+  is_adc_samplesA_active = true;
+  adc_sampling_hold_flag = false;
+  // turn on the TPM1 timer
+  TPM1->SC |= TPM_SC_CMOD(1);
+}
+
+// see .h for more details
+uint16_t* ain_get_prev_samples() {
+  // if A is active, return B 
+  if (is_adc_samplesA_active) {
+    return adc_samplesB;
+  // if B is active, return A
+  } else {
+    return adc_samplesA;
+  }
+}
+
+
+// see .h for more details
+void ain_set_adc_sampling_hold_flag(bool state) {
+  if (adc_sampling_hold_flag == state) {
+    return;
+  } else {
+    if (state == true) {
+      // state is true but flag was false - engage hold
+      adc_sampling_hold_flag = true;
+    } else {
+      // state is false but flag was true, release hold on adc and 
+      // restart dma0 for transfer
+      adc_sampling_hold_flag = false;
+      _restart_dma0();
+    }
+  }
+
+}
+
+// see .h for more details
+void _init_adc0() {
+  // enable clock gating
+  SIM->SCGC6 |= SIM_SCGC6_ADC0_MASK;
+  // enable alternate trigger pg. 201
+  // select TPM1 as trigger
+  SIM->SOPT7  = SIM_SOPT7_ADC0ALTTRGEN(1) | SIM_SOPT7_ADC0TRGSEL(9);
+
+  // pg. 466 datasheet
+  // use bus clock (24 MHz) and divide by 4
+  // sets to 16-bit single ended conversion
+  // note: input clock must be between 2 and 12 MHz for 16-bit mode
+  ADC0->CFG1  = ADC_CFG1_ADICLK(0) | ADC_CFG1_ADIV(2)  |
+                ADC_CFG1_MODE(3)   | ADC_CFG1_ADLPC(0) |
+                ADC_CFG1_ADLSMP(0);
+
+  ADC0->CFG2 = 0;
+
+  // select reference voltages
+  ADC0->SC2 = ADC_SC2_REFSEL(0) |  ADC_SC2_ADTRG(0) |
+              ADC_SC2_ACFE(0)   |  ADC_SC2_DMAEN(0);
+
+  // set adc0 input to SE14
+  // AIEN and DIFF
+  ADC0->SC1[0] = ADC_SC1_ADCH(14) | ADC_SC1_AIEN(0) | ADC_SC1_DIFF(0);
+
+  // run calibration datasheet sec 28.4.6:
+  // turn on averaging (32) temporarily for calibration sequence
+  ADC0->SC3 |= ADC_SC3_CAL_MASK | ADC_SC3_AVGS(3);
+  // start calibration
+  while(!(ADC0->SC1[0] & ADC_SC1_COCO_MASK)) {;} // wait for calibration complete
+
+  // plus-side calibration
+  uint16_t cal = 0;
+  cal = ADC0->CLP0+ADC0->CLP1+ADC0->CLP2+ADC0->CLP3+ADC0->CLP4+ADC0->CLPS;
+  cal = cal/2;
+  cal |= (1<<15); // set MSB
+  ADC0->PG = cal; // write calibration
+
+  // minus-side calibration
+  cal = 0;
+  cal = ADC0->CLM0+ADC0->CLM1+ADC0->CLM2+ADC0->CLM3+ADC0->CLM4+ADC0->CLMS;
+  cal = cal/2;
+  cal |= (1<<15); // set MSB
+  ADC0->MG = cal; // write calibration
+
+  // disable averaging
+  ADC0->SC3 &= ~(ADC_SC3_AVGS_MASK);
+  // re-enable hardware triggering
+  // enable dma request
+  ADC0->SC2 |= ADC_SC2_ADTRG(1) | ADC_SC2_DMAEN(1);
+}
+
+#define DMA_ADC0_COCO_TRIG  (40)
+// see .h for more details
+void _init_dma0() {
+  // enable clock gating to DMA
+  SIM->SCGC7 |= SIM_SCGC7_DMA_MASK;
+  SIM->SCGC6 |= SIM_SCGC6_DMAMUX_MASK;
+
+  // disable during config.
+  DMAMUX0->CHCFG[0] = 0;
+
+  // see pg. 357 of datasheet
+  // EINT  - Enable interrupts on transfer completion
+  // ERQ   - Enable peripheral request (from ADC0)
+  // DINC  - Enable destination increment after transfer
+  // SSIZE - sets source size to 16 bits (from ADC0)
+  // DSIZE - sets destination size to 16 bits
+  // D_REQ - DCR ERQ bit is cleared when BCR is depleted
+  // CS    - force single read/write per request (cycle steal)
+  DMA0->DMA[0].DCR = ( DMA_DCR_EINT_MASK  |
+                       DMA_DCR_ERQ_MASK   |
+                       DMA_DCR_DINC_MASK  |
+                       DMA_DCR_SSIZE(2)   |
+                       DMA_DCR_DSIZE(2)   |
+                       DMA_DCR_D_REQ_MASK |
+                       DMA_DCR_CS_MASK    );
+
+  // setup source from adc0, dest to adc_samples
+  DMA0->DMA[0].SAR = DMA_SAR_SAR((uint32_t)&(ADC0->R[0]));
+  DMA0->DMA[0].DAR = DMA_DAR_DAR((uint32_t)&(adc_samplesA[0]));
+  // load BCR with ADC_MAX_SIZE*2 bytes (16-bits) per transfer 
+  DMA0->DMA[0].DSR_BCR |= DMA_DSR_BCR_BCR(2*ADC_MAX_SIZE);
+  
+  // configure the interrupt upon transfer complete, priority 
+  NVIC_SetPriority(DMA0_IRQn, 2);
+  NVIC_ClearPendingIRQ(DMA0_IRQn);
+  NVIC_EnableIRQ(DMA0_IRQn);
+
+  // turn on the DMA, triggered by ADC0 conversion complete datasheet 3.4.8.1
+  DMAMUX0->CHCFG[0] = (DMAMUX_CHCFG_SOURCE(DMA_ADC0_COCO_TRIG) |
+                       DMAMUX_CHCFG_ENBL_MASK);
+}
+
+void _restart_dma0() {
+  // if A was just written, write to B so A can be processed
+  if (is_adc_samplesA_active) {
+    DMA0->DMA[0].DAR = DMA_DAR_DAR((uint32_t) (&(adc_samplesB[0])));
+    is_adc_samplesA_active = false;
+  } else {
+    DMA0->DMA[0].DAR = DMA_DAR_DAR((uint32_t) (&(adc_samplesA[0])));
+    is_adc_samplesA_active = true;
+  }
+  DMA0->DMA[0].DSR_BCR |= DMA_DSR_BCR_BCR(2*ADC_MAX_SIZE);
+  DMA0->DMA[0].DCR |= DMA_DCR_ERQ_MASK;
+}
+
+// see .h for more details 
+void DMA0_IRQHandler() {
+  // clear done flag
+  DMA0->DMA[0].DSR_BCR |= DMA_DSR_BCR_DONE_MASK;
+  // if the hold flag is set, wait to setup next DMA transfer 
+  if(adc_sampling_hold_flag) { 
+    return;
+  }
+  // if A was just written, write to B so A can be processed
+  if (is_adc_samplesA_active) {
+    DMA0->DMA[0].DAR = DMA_DAR_DAR((uint32_t) (&(adc_samplesB[0])));
+    is_adc_samplesA_active = false;
+  } else {
+    DMA0->DMA[0].DAR = DMA_DAR_DAR((uint32_t) (&(adc_samplesA[0])));
+    is_adc_samplesA_active = true;
+  }
+  DMA0->DMA[0].DSR_BCR |= DMA_DSR_BCR_BCR(2*ADC_MAX_SIZE);
+  DMA0->DMA[0].DCR |= DMA_DCR_ERQ_MASK;
+}
+
+#define TPM1_CLK_INPUT_FREQ (48000000UL) // 48 MHz
+// see .h for more details 
+void _init_tpm1() {
+
+  // configure clock gating for tpm1 on scgc6
+  SIM->SCGC6 |= SIM_SCGC6_TPM1_MASK; 
+  // Configure TPM clock source - KL25Z datasheet sec. 12.2.3
+  SIM->SOPT2 |= (SIM_SOPT2_TPMSRC(1) | SIM_SOPT2_PLLFLLSEL(1));
+  // set TPM count direction to up with divide by 2 prescaler
+  // KL25Z datasheet sec. 12.2.3
+  // TPM must be disabled to select prescale/counter bits:
+  TPM1->SC &= ~TPM_SC_CMOD_MASK;
+  TPM1->SC |= TPM_SC_PS(0) | TPM_SC_CPWMS(0);
+  // Continue the TPM operation while in debug mode
+  // KL25Z datasheet sec. 31.3.7
+  TPM1->CONF |= TPM_CONF_DBGMODE(0b11);
+  // set the overflow - KL25Z datasheet sec. 31.3.3
+  TPM1->MOD = TPM1_CLK_INPUT_FREQ/ADC_SAMPLING_FREQ - 1;
+  // clear counter 
+  TPM1->CNT = 0;
+  // note: TPM1 will be started when reading samples
+}
