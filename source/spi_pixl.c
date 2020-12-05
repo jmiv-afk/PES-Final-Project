@@ -12,14 +12,16 @@
 #include <stdbool.h>
 #include "MKL25Z4.h"
 #include "spi_pixl.h"
+#include "timer.h"
 
 // defines for pixels / colors
-#define PIXL_0          (0x80)
-#define PIXL_1          (0xFE)
-#define BITS_PER_PIXEL  (24)
-#define RED_MASK        (0xFF<<16)
-#define GRN_MASK        (0xFF<<8)
-#define BLU_MASK        (0xFF)
+#define PIXL_0          (0x80)      // the 0 bit for spi output
+#define PIXL_1          (0xFE)      // the 1 bit for spi output
+#define PIXL_RESET      (70)        // microseconds
+#define BITS_PER_PIXEL  (24)        // 24-bit G-R-B output for neopixels
+#define RED_MASK        (0xFF0000)
+#define GRN_MASK        (0x00FF00)
+#define BLU_MASK        (0x0000FF)
 
 // the board pins for SPI peripheral:
 #define SPI_PORT     (PORTD)
@@ -30,34 +32,39 @@
 // the DMA trigger setting for SPI0
 #define DMA_SPI0_TX_TRIG (17)
 
-static uint8_t *pixels;
+// the bytes that will go over spi to drive neopixels
 static uint8_t spi_output[NUM_PIXELS*BITS_PER_PIXEL];
+
+// flag indicating whether spi/dma has finished transmitting
 static volatile bool is_pixel_xmit_complete;
-static volatile bool is_reset_complete;
 
-void spi_pixl_reset() {
-  SPI_PORT->PCR[SPI_MOSI_PIN] &= ~PORT_PCR_MUX_MASK;
-}
-
-
-int spi_pixl_write(uint32_t *rgb_24bit_colors, uint32_t npixels) {
+// see .h for more details
+int spi_pixl_update(uint32_t *rgb_24bit_colors, uint32_t npixels) {
 
   // error case: 
   if (rgb_24bit_colors == NULL || npixels <= 0) return -1;
+
+  // wait while transmission completes
+  while(!is_pixel_xmit_complete) {;}
+
+  // reset timer to start reset sequence
+  reset_timer();
+  
+  // disable spi to send bus low for reset pulse while we 
+  // do some processing
+  SPI_PORT->PCR[SPI_MOSI_PIN] &= ~PORT_PCR_MUX_MASK;
 
   int i;
   uint32_t mask;
   int spi_idx = 0;
   uint32_t *color;
+  color = rgb_24bit_colors;
   
   for (i=0; i<npixels; i++) {
-    
-    // set color and extract values
-    color = rgb_24bit_colors+i;
 
     // generate spi bytes for green first
     for (mask=0x8000; mask>0x80; mask>>=1) {
-       if (*color & mask) {
+       if ((*color)&mask) {
          spi_output[spi_idx] = PIXL_1;
        } else {
          spi_output[spi_idx] = PIXL_0;
@@ -84,19 +91,16 @@ int spi_pixl_write(uint32_t *rgb_24bit_colors, uint32_t npixels) {
       }
       spi_idx++;
     }
-  
+  color++;
   } // end for loop over npixels
 
-  // wait for pixel xmit completion:
-  while (!is_pixel_xmit_complete) {;}
 
-  is_pixel_xmit_complete = false; 
 
-  // enable the mux (complete's reset)
-  SPI_PORT->PCR[SPI_MOSI_PIN] |= PORT_PCR_MUX(SPI_MUX_ALT);
+  // wait for timer to indicate reset 
+  while (get_timer_us() < PIXL_RESET) {;}
 
   // load BCR with bytes for transfer
-  //  example calculation:
+  //   via calculation:
   //    
   //      1 Byte     24 RGB Bits    
   //    --------- * ------------- * 8 pixels = 192 bytes
@@ -107,25 +111,32 @@ int spi_pixl_write(uint32_t *rgb_24bit_colors, uint32_t npixels) {
   // setup source register to start at index+1 of spi_output
   DMA0->DMA[1].SAR = DMA_SAR_SAR((uint32_t)&(spi_output));
 
-  //SPI0->D = *spi_output;
+  //SPI0->D = spi_output[0];
 
+  // set flag 
+  is_pixel_xmit_complete = false; 
+
+  // re-enable the spi mux bits for transfer
+  SPI_PORT->PCR[SPI_MOSI_PIN] |= PORT_PCR_MUX(SPI_MUX_ALT);
   // re-enable peripheral request
   DMA0->DMA[1].DCR |= DMA_DCR_ERQ_MASK;
 
   return 0;
 }
 
-
 // see .h for more details
 void spi_pixl_init() {
+
+  // init systick, dma1, spi0
+  systick_init();
   _init_dma1();
   _init_spi0();
+
+  // set xmit complete flag
   is_pixel_xmit_complete = true;
-  is_reset_complete = true;
 }
 
-
-// steps from datasheet 37.4.4.1
+// steps from datasheet 37.4.4.1 for configuring SPI TX via DMA:
 // configure DMA for spi transmission
 // configure spi before transmission
 // set SPE1 to start transmission
@@ -136,6 +147,7 @@ void spi_pixl_init() {
 
 // see .h for more details
 void _init_spi0() {
+
   // enable clock gating to SPI0
   SIM->SCGC4 |= SIM_SCGC4_SPI0_MASK;
   
@@ -166,12 +178,14 @@ void _init_spi0() {
 
 // see .h for more details 
 void DMA1_IRQHandler() {
+
   // clear done flag
   DMA0->DMA[1].DSR_BCR |= DMA_DSR_BCR_DONE_MASK;
   
   // just set a flag that DMA transf. complete for last series
-  // of pixels?
   is_pixel_xmit_complete = true;
+
+  // send spi bus low
   SPI_PORT->PCR[SPI_MOSI_PIN] &= ~PORT_PCR_MUX_MASK;
 }
 

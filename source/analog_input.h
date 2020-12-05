@@ -2,8 +2,8 @@
  * analog_input.h - Interface for sampling ADC0 via DMA0 at ADC_SAMPLING_FREQ  
  *
  * @author  Jake Michael
- * @date    2020-11-23
- * @rev     1.2
+ * @date    
+ * @rev     
  * -----------------------------------------------------------------------------
  */
 
@@ -19,33 +19,37 @@
  */
 
 /*
- * @brief   
+ * @brief  Returns the most recent buffer of ADC samples 
  *
- * @param   
- *          
- * @return  
+ * Internal ping-pong buffers are used. A call to this function initiates a 
+ * new ADC recording (in the background) executed via DMA. It also returns the 
+ * previously recorded data via a ping-pong buffering scheme. The buffer 
+ * returned is safe to modify or process until the next call to ain_get_samples()
+ * at which point it will be overwritten. 
+ *
+ * @param  none
+ * @return uint16_t*, an ADC sample buffer with length 256 samples 
+ *                    NULL if adc samples are not available 
  */
-uint16_t* ain_get_prev_samples();
+uint16_t* ain_get_samples();
 
 
 /*
- * @brief   
+ * @brief   Returns boolean indicating whether samples are available 
  *
- * @param   
- *          
- * @return  
+ * @param   none
+ * @return  bool, true  - samples available.
+ *                false - samples not available.
  */
-void ain_set_adc_sampling_hold_flag(bool state);
-
-void ain_analyze();
+bool ain_is_adc_samples_avail();
 
 
 /*
  * @brief   Initializes ADC0, DMA0, and TPM1 
  *
  * ADC0 is set up to trigger on TPM1 overflow at ADC_SAMPLING_FREQ. DMA0 is 
- * triggered on ADC0 conversion completion to move the ADC data to either 
- * adc_samples_ping or adc_samples_pong, depending on is_acq_into_pong bool. 
+ * triggered on ADC0 conversion completion to move the ADC data to one of the
+ * two ping pong buffers (A or B) depending on which one was previously written 
  *
  * @param   none
  * @return  none
@@ -62,7 +66,8 @@ void ain_init();
 /*
  * @brief   Initializes ADC0 for sampling via TPM1 overflow
  *
- * Sets up ADC0 for 16 bit single-ended (unsigned) readings from the DAC 
+ * Sets up ADC0 for 16 bit single-ended (unsigned) readings from the board
+ * pin PTC0 
  *
  * @param   none
  * @return  none
@@ -70,8 +75,7 @@ void ain_init();
 void _init_adc0();
 
 /*
- * @brief   
- *
+ * @brief  Initializes DMA0 for sampling ADC0 via TPM1 overflow
  *
  * @param   none
  * @return  none
@@ -79,8 +83,7 @@ void _init_adc0();
 void _init_dma0();
 
 /*
- * @brief   
- *
+ * @brief   Restarts DMA0 for sampling ADC0 via TPM1 overflow 
  *
  * @param   none
  * @return  none
@@ -88,8 +91,9 @@ void _init_dma0();
 void _restart_dma0();
 
 /*
- * @brief   
+ * @brief   The DMA0 IRQ handler for automatically sampling ADC0 
  *
+ * A new sequence of samples will be gathered unless the adc is suspended.
  *
  * @param   none
  * @return  none

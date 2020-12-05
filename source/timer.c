@@ -16,7 +16,7 @@
 #include "timer.h"
 
 // the desired frequency for SysTick interrupts:
-#define SYSTICK_INTERRUPT_FREQ  100UL // Hz
+#define SYSTICK_INTERRUPT_FREQ  10000UL // Hz
 
 // the clock source frequency used for SysTick timer
 // valid values are 48000000 (core clock) and 3000000 (core clock/16)
@@ -84,10 +84,10 @@ ticktime_t now_ticks() {
 }
 
 
-uint32_t now_ms() {
+uint32_t now_us() {
 	if (now_ticks() == 0)
 		return 0;
-	return ( now_ticks()*1000/SYSTICK_INTERRUPT_FREQ );
+	return ( now_ticks()*1000000/SYSTICK_INTERRUPT_FREQ );
 }
 
 void reset_timer() {
@@ -108,8 +108,8 @@ ticktime_t get_timer_ticks() {
 	return (curr_ticks + (1 + TIME_MAX - g_start_ticks) );
 }
 
-uint32_t get_timer_ms() {
-	return ( get_timer_ticks()*1000/SYSTICK_INTERRUPT_FREQ );
+uint32_t get_timer_us() {
+	return ( get_timer_ticks()*100000/SYSTICK_INTERRUPT_FREQ );
 }
 
 void delay_ms(uint16_t ms) {

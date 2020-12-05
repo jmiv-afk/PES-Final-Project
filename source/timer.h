@@ -43,14 +43,14 @@ void systick_init();
 ticktime_t now_ticks();
 
 /*
- * @brief  returns the msec since timer initialization
+ * @brief  returns the microsec since timer initialization
  *
  * calls now_ticks() and applies conversion to get approximate msec
  *
  * @param  none
- * @return uint32_t the total msec (system uptime) since timer initialized
+ * @return uint32_t the total usec (system uptime) since timer initialized
  */
-uint32_t now_ms();
+uint32_t now_us();
 
 /*
  * @brief  resets the current timer to zero
@@ -69,14 +69,14 @@ void reset_timer();
 ticktime_t get_timer_ticks();
 
 /*
- * @brief  returns the msec since timer initialization
+ * @brief  returns the usec since timer initialization
  *
  * calls get_timer_ticks() and applies conversion to get approximate msec
  *
  * @param  none
  * @return uint32_t the msec since timer initialized
  */
-uint32_t get_timer_ms();
+uint32_t get_timer_us();
 
 /*
  * @brief  executes a hard-spin delay in milliseconds

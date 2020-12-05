@@ -1,9 +1,9 @@
 /* -----------------------------------------------------------------------------
- * analog_input.h - Interface for sampling ADC0 via DMA0 at ADC_SAMPLING_FREQ  
+ * analog_input.c - Interface for sampling ADC0 via DMA0 at ADC_SAMPLING_FREQ  
  *
  * @author  Jake Michael
- * @date    2020-11-23
- * @rev     1.2
+ * @date    
+ * @rev     
  * -----------------------------------------------------------------------------
  */
 
@@ -11,57 +11,109 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include <stddef.h>
 #include "MKL25Z4.h"
 #include "analog_input.h"
+
+#define START_CRITICAL_SECTION \
+          uint32_t masking_state = __get_PRIMASK(); \
+          __disable_irq()
+
+#define END_CRITICAL_SECTION \
+          __set_PRIMASK(masking_state)
 
 #define ADC_SAMPLING_FREQ  (48000U) // in Hz
 #define ADC_MAX_SIZE         (256)
 
+// use a ping-pong buffer approach
 static uint16_t adc_samplesA[ADC_MAX_SIZE];
 static uint16_t adc_samplesB[ADC_MAX_SIZE];
-static bool     is_adc_samplesA_active;
-static bool     adc_sampling_hold_flag;
+// the status flags
+static volatile bool is_adc_samplesA_recording;
+static volatile bool is_adc_samples_avail;
 
 // see .h for more details
 void ain_init() {
+
+  // init dma0, tpm1, adc0
   _init_dma0();
   _init_tpm1();
   _init_adc0();
-  is_adc_samplesA_active = true;
-  adc_sampling_hold_flag = false;
-  // turn on the TPM1 timer
+
+  // samplesA is recording first according to DMA config
+  is_adc_samplesA_recording = true;
+  is_adc_samples_avail = false;
+  
+  // turn on the TPM1 timer - to kick DMA0
   TPM1->SC |= TPM_SC_CMOD(1);
 }
 
+
 // see .h for more details
-uint16_t* ain_get_prev_samples() {
-  // if A is active, return B 
-  if (is_adc_samplesA_active) {
-    return adc_samplesB;
-  // if B is active, return A
-  } else {
-    return adc_samplesA;
-  }
+bool ain_is_adc_samples_avail() {
+  return is_adc_samples_avail;
 }
 
 
 // see .h for more details
-void ain_set_adc_sampling_hold_flag(bool state) {
-  if (adc_sampling_hold_flag == state) {
+uint16_t* ain_get_samples() {
+
+  // if samples are not available, we are still recording
+  // so return NULL
+  if (!is_adc_samples_avail) {
+    return NULL;
+  }
+  
+  // the return buffer:
+  uint16_t* process_buffer_return;
+
+  START_CRITICAL_SECTION;
+
+  // if samplesA was previously recording, return samplesA
+  if (is_adc_samplesA_recording) {
+    process_buffer_return = adc_samplesA;
+    // setup DMA destination
+    DMA0->DMA[0].DAR = DMA_DAR_DAR((uint32_t) (&(adc_samplesB[0])));
+    is_adc_samplesA_recording = false;
+
+  // if samplesB was previously recording, return samplesB
+  } else {
+    process_buffer_return = adc_samplesB;
+    // setup DMA destination
+    DMA0->DMA[0].DAR = DMA_DAR_DAR((uint32_t) (&(adc_samplesA[0])));
+    is_adc_samplesA_recording = true;
+  }
+  
+  // need to record a new buffer before more samples become avail
+  is_adc_samples_avail = false;
+
+  // re-start DMA0
+  DMA0->DMA[0].DSR_BCR |= DMA_DSR_BCR_BCR(2*ADC_MAX_SIZE);
+  DMA0->DMA[0].DCR |= DMA_DCR_ERQ_MASK;
+
+  END_CRITICAL_SECTION;
+
+  // return buffer for processing
+  return process_buffer_return;
+}
+
+/*
+// see .h for more details
+void ain_resume() {
+  if (adc_suspend != true) {
+    // already running, no need to resume
     return;
   } else {
-    if (state == true) {
-      // state is true but flag was false - engage hold
-      adc_sampling_hold_flag = true;
-    } else {
-      // state is false but flag was true, release hold on adc and 
-      // restart dma0 for transfer
-      adc_sampling_hold_flag = false;
-      _restart_dma0();
-    }
-  }
+    adc_suspend = false;
+    _restart_dma0();
+  } 
+}*/
 
+// see .h for more details 
+void DMA0_IRQHandler() {
+  // clear done flag
+  DMA0->DMA[0].DSR_BCR |= DMA_DSR_BCR_DONE_MASK;
+  // samples are now available
+  is_adc_samples_avail = true;
 }
 
 // see .h for more details
@@ -159,38 +211,6 @@ void _init_dma0() {
                        DMAMUX_CHCFG_ENBL_MASK);
 }
 
-void _restart_dma0() {
-  // if A was just written, write to B so A can be processed
-  if (is_adc_samplesA_active) {
-    DMA0->DMA[0].DAR = DMA_DAR_DAR((uint32_t) (&(adc_samplesB[0])));
-    is_adc_samplesA_active = false;
-  } else {
-    DMA0->DMA[0].DAR = DMA_DAR_DAR((uint32_t) (&(adc_samplesA[0])));
-    is_adc_samplesA_active = true;
-  }
-  DMA0->DMA[0].DSR_BCR |= DMA_DSR_BCR_BCR(2*ADC_MAX_SIZE);
-  DMA0->DMA[0].DCR |= DMA_DCR_ERQ_MASK;
-}
-
-// see .h for more details 
-void DMA0_IRQHandler() {
-  // clear done flag
-  DMA0->DMA[0].DSR_BCR |= DMA_DSR_BCR_DONE_MASK;
-  // if the hold flag is set, wait to setup next DMA transfer 
-  if(adc_sampling_hold_flag) { 
-    return;
-  }
-  // if A was just written, write to B so A can be processed
-  if (is_adc_samplesA_active) {
-    DMA0->DMA[0].DAR = DMA_DAR_DAR((uint32_t) (&(adc_samplesB[0])));
-    is_adc_samplesA_active = false;
-  } else {
-    DMA0->DMA[0].DAR = DMA_DAR_DAR((uint32_t) (&(adc_samplesA[0])));
-    is_adc_samplesA_active = true;
-  }
-  DMA0->DMA[0].DSR_BCR |= DMA_DSR_BCR_BCR(2*ADC_MAX_SIZE);
-  DMA0->DMA[0].DCR |= DMA_DCR_ERQ_MASK;
-}
 
 #define TPM1_CLK_INPUT_FREQ (48000000UL) // 48 MHz
 // see .h for more details 

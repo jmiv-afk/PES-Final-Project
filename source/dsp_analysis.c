@@ -17,14 +17,11 @@
 #define NSAMPLES      (256)
 #define FFT_MAG_LEN   (128)
 
-static volatile uint16_t samples;
 static arm_rfft_instance_q15 fft_q15_ctx = {0};
-static volatile q15_t FFT_input[NSAMPLES];
-static volatile q15_t FFT_output[2*NSAMPLES];
-static volatile q15_t FFT_mag[NSAMPLES];
-static volatile q15_t temp[NSAMPLES];
+static q15_t FFT_input[NSAMPLES];
+static q15_t FFT_output[2*NSAMPLES];
+static q15_t FFT_mag[NSAMPLES];
 static const int16_t window[NSAMPLES];
-
 
 // see .h for more details
 void dsp_find_peaks(int16_t* fft_mag, fft_peaks* dest) {
@@ -81,7 +78,7 @@ int16_t* dsp_fft_mag(uint16_t* samples, int nsamples) {
 }
 
 
-// the smoothing window
+// the Hanning smoothing window
 static const int16_t window[NSAMPLES] = {
     0,     4,    19,    44,    79,   124,   178,   243,
     317,   401,   494,   598,   710,   833,   965,  1106,
