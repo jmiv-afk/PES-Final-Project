@@ -16,7 +16,9 @@
 #include "analog_input.h"
 #include "test_dsp_analysis.h"
 #include "dsp_analysis.h"
-#include "spi_pixl.h"
+#include "tpm_pixl.h"
+
+#define ABS(N) ((N<0)?(-N):(N))
 
 void system_init() {
   // initialize hardware
@@ -33,7 +35,7 @@ void system_init() {
   ain_init();
 
   // initialize the neopixels
-  spi_pixl_init();
+  tpm_pixl_init();
 }
 
 //#define TESTING
@@ -50,7 +52,19 @@ int main(void) {
   printf("all tests passed\r\n");
 #else
 
-  uint32_t led_colors[8] = {
+  uint32_t init_led_colors[8] = {
+      0xFF0000, // red
+      0xFF0000, // red
+      0xFF0000, // red
+      0xFF0000, // red
+      0xFF0000, // red
+      0xFF0000, // red
+      0xFF0000, // red
+      0xFF0000  // red
+      };
+  
+  /*
+  uint32_t init_led_colors[8] = {
       0xFF0000, // red
       0xFF8000, // orange
       0xFFFF00, // yellow
@@ -60,15 +74,21 @@ int main(void) {
       0x7F00FF, // purple
       0xFF00FF  // pink
       };
+*/
+  uint32_t *curr_led_colors;
+  uint8_t dimmer[8] = {0,0,0,0,0,0,0,0};
+  int thresh = 5;
 
   uint16_t *samples;
-  int16_t *fft_mag;
-  
-  fft_peaks *temp;
+  int16_t *fft_mags;
+
+  fft_peaks *fftpeaks_tmp; 
   fft_peaks prev;
   fft_peaks curr;
-
-  spi_pixl_update(&led_colors, 8);
+  
+  tpm_pixl_update(&init_led_colors, NUM_PIXELS);
+  
+  curr_led_colors = init_led_colors;
 
   while(1) {
 
@@ -76,21 +96,37 @@ int main(void) {
     while( !ain_is_adc_samples_avail() ) {;}
     // get ADC samples from microphone 
     samples = ain_get_samples();
-    // get fft magnitude (power spectrum of ADC samples)
-    fft_mag = dsp_fft_mag(samples, 256);
+    // get fft magsnitude (power spectrum of ADC samples)
+    fft_mags = dsp_fft_mag(samples, 256);
     // find the peaks 
-    dsp_find_peaks(fft_mag, &prev);
+    dsp_find_peaks(fft_mags, &prev);
 
-    // wait until more samples are available
-    while( !ain_is_adc_samples_avail() ) {;}
-    // get ADC samples from microphone 
-    samples = ain_get_samples();
-    // get fft magnitude (power spectrum of ADC samples)
-    fft_mag = dsp_fft_mag(samples, 256);
-    // find the peaks 
-    dsp_find_peaks(fft_mag, &curr);
-    
-    spi_pixl_update(&led_colors, 8);
+    while(1) {
+      // wait until more samples are available
+      while( !ain_is_adc_samples_avail() ) {;}
+      // get ADC samples from microphone 
+      samples = ain_get_samples();
+      // get fft magsnitude (power spectrum of ADC samples)
+      fft_mags = dsp_fft_mag(samples, 256);
+      // find the peaks 
+      dsp_find_peaks(fft_mags, &curr);
+      
+      for (int i=0; i<NUM_PIXELS; i++) {
+        if ( ABS(curr.mags[i] - prev.mags[i]) > thresh && 
+             curr.mags[i] > prev.mags[i] ) {
+          // current peak mags is greater than previous and above threshold
+          dimmer[i] = (dimmer[i]+1);
+        } else if ( ABS(curr.mags[i] - prev.mags[i]) > thresh && 
+            curr.mags[i] < prev.mags[i]) {
+          // current peak mags is less than previous and above threshold
+          dimmer[i] = (dimmer[i]-1);
+        }
+        curr_led_colors[i] = tpm_pixl_dim(NULL, &init_led_colors[i], dimmer[i]);
+      }
+
+      tpm_pixl_update(&curr_led_colors, NUM_PIXELS);
+      prev = curr;
+    }
   }
 
   // will never return

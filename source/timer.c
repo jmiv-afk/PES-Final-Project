@@ -16,7 +16,7 @@
 #include "timer.h"
 
 // the desired frequency for SysTick interrupts:
-#define SYSTICK_INTERRUPT_FREQ  10000UL // Hz
+#define SYSTICK_INTERRUPT_FREQ  100UL // Hz
 
 // the clock source frequency used for SysTick timer
 // valid values are 48000000 (core clock) and 3000000 (core clock/16)
@@ -55,7 +55,7 @@ void systick_init() {
 	SysTick->VAL = SYSTICK_LOAD_SETPOINT;
 
 	// set interrupt priority
-	NVIC_SetPriority(SysTick_IRQn, 3);
+	NVIC_SetPriority(SysTick_IRQn, 4);
 
 	/* Enables SysTick timer with:
 	 * 		interrupts enabled at frequency of SYSTICK_INTERRUPT_FREQ

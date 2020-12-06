@@ -34,17 +34,17 @@ static volatile bool is_adc_samples_avail;
 // see .h for more details
 void ain_init() {
 
-  // init dma0, tpm1, adc0
+  // init dma0, tpm0, adc0
   _init_dma0();
-  _init_tpm1();
+  _init_tpm0();
   _init_adc0();
 
   // samplesA is recording first according to DMA config
   is_adc_samplesA_recording = true;
   is_adc_samples_avail = false;
   
-  // turn on the TPM1 timer - to kick DMA0
-  TPM1->SC |= TPM_SC_CMOD(1);
+  // turn on the TPM0 timer - to kick DMA0
+  TPM0->SC |= TPM_SC_CMOD(1);
 }
 
 
@@ -96,18 +96,6 @@ uint16_t* ain_get_samples() {
   return process_buffer_return;
 }
 
-/*
-// see .h for more details
-void ain_resume() {
-  if (adc_suspend != true) {
-    // already running, no need to resume
-    return;
-  } else {
-    adc_suspend = false;
-    _restart_dma0();
-  } 
-}*/
-
 // see .h for more details 
 void DMA0_IRQHandler() {
   // clear done flag
@@ -121,7 +109,7 @@ void _init_adc0() {
   // enable clock gating
   SIM->SCGC6 |= SIM_SCGC6_ADC0_MASK;
   // enable alternate trigger pg. 201
-  // select TPM1 as trigger
+  // select TPM0 as trigger
   SIM->SOPT7  = SIM_SOPT7_ADC0ALTTRGEN(1) | SIM_SOPT7_ADC0TRGSEL(9);
 
   // pg. 466 datasheet
@@ -212,25 +200,25 @@ void _init_dma0() {
 }
 
 
-#define TPM1_CLK_INPUT_FREQ (48000000UL) // 48 MHz
+#define TPM0_CLK_INPUT_FREQ (48000000UL) // 48 MHz
 // see .h for more details 
-void _init_tpm1() {
+void _init_tpm0() {
 
-  // configure clock gating for tpm1 on scgc6
-  SIM->SCGC6 |= SIM_SCGC6_TPM1_MASK; 
+  // configure clock gating for tpm0 on scgc6
+  SIM->SCGC6 |= SIM_SCGC6_TPM0_MASK; 
   // Configure TPM clock source - KL25Z datasheet sec. 12.2.3
   SIM->SOPT2 |= (SIM_SOPT2_TPMSRC(1) | SIM_SOPT2_PLLFLLSEL(1));
-  // set TPM count direction to up with divide by 2 prescaler
+  // set TPM count direction to up with prescaler
   // KL25Z datasheet sec. 12.2.3
   // TPM must be disabled to select prescale/counter bits:
-  TPM1->SC &= ~TPM_SC_CMOD_MASK;
-  TPM1->SC |= TPM_SC_PS(0) | TPM_SC_CPWMS(0);
+  TPM0->SC &= ~TPM_SC_CMOD_MASK;
+  TPM0->SC |= TPM_SC_PS(0) | TPM_SC_CPWMS(0);
   // Continue the TPM operation while in debug mode
   // KL25Z datasheet sec. 31.3.7
-  TPM1->CONF |= TPM_CONF_DBGMODE(0b11);
+  TPM0->CONF |= TPM_CONF_DBGMODE(0b11);
   // set the overflow - KL25Z datasheet sec. 31.3.3
-  TPM1->MOD = TPM1_CLK_INPUT_FREQ/ADC_SAMPLING_FREQ - 1;
+  TPM0->MOD = TPM0_CLK_INPUT_FREQ/ADC_SAMPLING_FREQ - 1;
   // clear counter 
-  TPM1->CNT = 0;
-  // note: TPM1 will be started when reading samples
+  TPM0->CNT = 0;
+  // note: TPM0 will be started when reading samples
 }

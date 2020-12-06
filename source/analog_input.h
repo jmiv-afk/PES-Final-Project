@@ -45,9 +45,9 @@ bool ain_is_adc_samples_avail();
 
 
 /*
- * @brief   Initializes ADC0, DMA0, and TPM1 
+ * @brief   Initializes ADC0, DMA0, and TPM0 
  *
- * ADC0 is set up to trigger on TPM1 overflow at ADC_SAMPLING_FREQ. DMA0 is 
+ * ADC0 is set up to trigger on TPM0 overflow at ADC_SAMPLING_FREQ. DMA0 is 
  * triggered on ADC0 conversion completion to move the ADC data to one of the
  * two ping pong buffers (A or B) depending on which one was previously written 
  *
@@ -64,7 +64,7 @@ void ain_init();
  */
 
 /*
- * @brief   Initializes ADC0 for sampling via TPM1 overflow
+ * @brief   Initializes ADC0 for sampling via TPM0 overflow
  *
  * Sets up ADC0 for 16 bit single-ended (unsigned) readings from the board
  * pin PTC0 
@@ -75,7 +75,7 @@ void ain_init();
 void _init_adc0();
 
 /*
- * @brief  Initializes DMA0 for sampling ADC0 via TPM1 overflow
+ * @brief  Initializes DMA0 for sampling ADC0 via TPM0 overflow
  *
  * @param   none
  * @return  none
@@ -83,7 +83,7 @@ void _init_adc0();
 void _init_dma0();
 
 /*
- * @brief   Restarts DMA0 for sampling ADC0 via TPM1 overflow 
+ * @brief   Restarts DMA0 for sampling ADC0 via TPM0 overflow 
  *
  * @param   none
  * @return  none
@@ -101,11 +101,11 @@ void _restart_dma0();
 void DMA0_IRQHandler();
 
 /*
- * @brief   Initializes TPM1 to overflow at ADC_SAMPLING_FREQ in Hz
+ * @brief   Initializes TPM0 to overflow at ADC_SAMPLING_FREQ in Hz
  *
  * @param   none
  * @return  none
  */
-void _init_tpm1();
+void _init_tpm0();
 
 #endif // _ANALOG_INPUT_H_
