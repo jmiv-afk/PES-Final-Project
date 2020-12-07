@@ -5,7 +5,7 @@
 
 - - - -
 ### Introduction ###
-This repository contains code for my Final Project for ECEN 5813 (Principles of Embedded Software) at CU, Boulder for Fall 2020. The ultimate goal for the project was to use several of the topics discussed throughout the course to create something interesting for the FRDM-KL25Z development platform. My idea for the project was to do music visualization using a microphone, the ADC and some LEDs. This project utilizes several of the topics discussed in the course. Specifically, I used several of the hardware peripherals integrated into the KL25Z board including the analog to digital converter (ADC), the pulse width modulation peripheral (PWM or TPM), and direct memory access (DMA) to get a highly performant and responsive music visualization output to the LEDs in real time. 
+This repository contains code for my Final Project for ECEN 5813 (Principles of Embedded Software) at CU, Boulder for Fall 2020. The ultimate goal for the project was to use several of the topics discussed throughout the course to create something interesting for the FRDM-KL25Z development platform. My idea for the project was to do music visualization using a microphone, the ADC and some LEDs. This project utilizes several of the topics discussed in the course. Specifically, I used several of the hardware peripherals integrated into the KL25Z board including the analog to digital converter (ADC), the pulse width modulation peripheral (PWM or TPM), and direct memory access (DMA) to get a highly performant and responsive music visualization output to the LEDs in real time. Check it out in action [here!] (https://www.youtube.com/watch?v=mUhIlcwcJEQ&t)
 
 
 
