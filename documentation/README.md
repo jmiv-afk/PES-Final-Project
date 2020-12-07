@@ -48,7 +48,7 @@ Although I used an external CMSIS library for the FFT, it was important to verif
 In addition to testing the CMSIS library, I used an oscilloscope to verify that the output waveforms to the Neopixels were within the specification. This was a critical tool for use in debugging this portion of the project and I likely could not have generated the proper neopixel timing without it. The below scopeshot shows the neopixel 1's and 0's:
 
 <p align="center">
-<img src="neopixel_scopeshot.png" width="350" title="neopixel scopeshot">
+<img src="neopixel_scopeshot.png" width="550" title="neopixel scopeshot">
 </p>
 
 #### Recommended Prerequisites ####
