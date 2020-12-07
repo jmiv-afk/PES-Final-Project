@@ -1,14 +1,12 @@
 - - - - 
-# Principals of Embedded Software Assignment 7 #
-#### Code for Assignment 7 for PES, ECEN-5813, Fall 2020 ####
+# Principals of Embedded Software Final Project #
+#### Code for Final Project for PES, ECEN-5813, Fall 2020 ####
 #### Author Jake Michael ####
-#### CU identikey: jami1063 ####
-#### CU ID: 101920267 ####
-#### Revision: 1.2 ####
 
 - - - -
 ### Introduction ###
-This repository is a private repository which contains the IDE project files for ECEN-5813, Principles of Embedded Software (PES), Assignment 7. This code should not be used by any third parties without the author's express written consent (which will not be given to other PES students). This project explores direct memory access (DMA), digital-to-analog conversion (DAC), and analog-to-digital conversion (ADC) with the KL25Z development board. 
+This repository contains code for my Final Project for ECEN 5813 (Principles of Embedded Software) at CU, Boulder for Fall 2020. The ultimate goal for the project was to use several of the topics discussed throughout the course to create something interesting for the FRDM-KL25Z development platform. My idea for the project was to do music visualization using a microphone, the ADC and some LEDs. 
+
 - - - -
 ### Recommended Prerequisites ###
 This code should be run on the NXP FRDM-KL25Z development board and built with NXP's MCUxpresso IDE.
@@ -22,19 +20,38 @@ The user should run the code after importing the project into NXP's MCUxpresso I
 4. Now you should be able to see the project in the IDE workspace. The code is now ready to be built and run / debugged from the IDE. 
 
 - - - - 
-### Analog Interfacing ### 
-This assignment primarily explores analog interfacing. The assignment consists of two primary modules that interface together: analog_input.[c/h] and analog_output.[c/h]. The analog input module primarily deals with the ADC and TPM1, while the analog output module deals with the DAC, DMA and TPM0. The fixed_sine.[c/h] module presents a lookup table based fixed-point sine approximation. The `fp_sin` function returns values between -2037 and 2037 with fixed point integer inputs between INT_MIN and INT_MAX. The premise of the code is that we fill a buffer of sine wave output values to play a tone at a prescribed frequency. We then use DMA to consistently load the sine wave values into the 12-bit DAC with an output rate of 48 kHz (set by TPM0). While the DAC is looping, we use the ADC to sample the DAC output at 96 kHz (via TPM1) and run some statistical analysis on the samples. We output the results of the statistical analysis to UART including: minimum, maximum, average, period (calculated via Howdy's autocorrelate), and frequency (based on said period).         
+### Hardware ### 
+This project utilized various hardware components, listed below:
+* FRDM-KL25Z development board.
+* [Sparkfun Sound Detector](https://www.sparkfun.com/products/12642) microphone module.
+* [WS2812B's](https://www.digikey.com/en/datasheets/parallaxinc/parallax-inc-28085-ws2812b-rgb-led-datasheet), popularly known as Neopixels.
+* [74HCT245 IC](https://www.digikey.com/en/products/detail/texas-instruments/CD74HCT245E/38454) for 3.3 V to 5 V logic level conversion for Neopixels.
+* 5V, 2A DC power supply.
+
+The Sound Detector Module output was wired to the analog input pin of the KL25Z (Port C, Pin 0). Since Neopixels are typically driven with a 5 V power source at 5 V logic, the 74HCT245 was used to convert the logic level. This is a high quality (fast response time) CMOS Logic Octal-Bus Transceiver. The KL25Z output pin that drives the Neopixels is Port A, Pin 12. The schematic below shows the circuit design for logic level conversion:
+
+<p align="center">
+  <img src="74HCT245_sch.jpg" width="450" title="74HCT245">
+</p>
+
+Finally, I 3D printed a neopixel ring mount and soldered together 8 neopixels. Here are a few photos of the final breadboard and Neopixel ring:
+<p align="center">
+  <img src="Ring_Back.jpg" width="350" title="neopixel ring back">
+</p>
+<p align="center">
+<img src="Project_Breadboard.jpg" width="350" title="project breadboard">
+</p>
 
 - - - -
-### Extra Credit ###
-The following waveforms were captured with the Siglent SDS 1104X-E oscilloscope. They are generally inline with the UART statistical output. The oscilloscope results give me even more confidence than the fixed point autocorrelate output. The scopeshots show the mean frequency measurement of the DAC output waveforms are all within 0.1% of the coded value. 
+### Software ###
 
+#### Testing ####
 
-![440 Hz DAC Output](scopeshots/440Hz.png)
-![587 Hz DAC Output](scopeshots/587Hz.png)
-![659 Hz DAC Output](scopeshots/659Hz.png)
-![880 Hz DAC Output](scopeshots/880Hz.png)
+- - - -
+### Acknowledgements ###
+Big thanks to the instructor Howdy Pierce and the TA's Saket Penurkar and Rakesh Kumar for a great semester! I truly enjoyed the course and want to thank them for making it all possible. 
+- - - -
 
 - - - - 
-### Project Link: [https://github.com/jmichael16/PES-Assignment-7](https://github.com/jmichael16/PES-Assignment-7) ###
+### Project Link: [https://github.com/jmichael16/PES-Final-Project](https://github.com/jmichael16/PES-Final-Project) ###
 - - - -
