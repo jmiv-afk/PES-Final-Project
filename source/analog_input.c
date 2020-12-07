@@ -1,9 +1,11 @@
 /* -----------------------------------------------------------------------------
  * analog_input.c - Interface for sampling ADC0 via DMA0 at ADC_SAMPLING_FREQ  
  *
+ * Single ended 16-bit analog samples are recorded from KL25Z PortC, Pin0 (PTC0) 
+ *
  * @author  Jake Michael
- * @date    
- * @rev     
+ * @date    2020-12-07
+ * @rev     1.3
  * -----------------------------------------------------------------------------
  */
 
@@ -22,11 +24,12 @@
           __set_PRIMASK(masking_state)
 
 #define ADC_SAMPLING_FREQ  (48000U) // in Hz
-#define ADC_MAX_SIZE         (256)
+#define ADC_MAX_SAMPLES    (512)  
+
 
 // use a ping-pong buffer approach
-static uint16_t adc_samplesA[ADC_MAX_SIZE];
-static uint16_t adc_samplesB[ADC_MAX_SIZE];
+static uint16_t adc_samplesA[ADC_MAX_SAMPLES];
+static uint16_t adc_samplesB[ADC_MAX_SAMPLES];
 // the status flags
 static volatile bool is_adc_samplesA_recording;
 static volatile bool is_adc_samples_avail;
@@ -87,7 +90,7 @@ uint16_t* ain_get_samples() {
   is_adc_samples_avail = false;
 
   // re-start DMA0
-  DMA0->DMA[0].DSR_BCR |= DMA_DSR_BCR_BCR(2*ADC_MAX_SIZE);
+  DMA0->DMA[0].DSR_BCR |= DMA_DSR_BCR_BCR(2*ADC_MAX_SAMPLES);
   DMA0->DMA[0].DCR |= DMA_DCR_ERQ_MASK;
 
   END_CRITICAL_SECTION;
@@ -186,8 +189,8 @@ void _init_dma0() {
   // setup source from adc0, dest to adc_samples
   DMA0->DMA[0].SAR = DMA_SAR_SAR((uint32_t)&(ADC0->R[0]));
   DMA0->DMA[0].DAR = DMA_DAR_DAR((uint32_t)&(adc_samplesA[0]));
-  // load BCR with ADC_MAX_SIZE*2 bytes (16-bits) per transfer 
-  DMA0->DMA[0].DSR_BCR |= DMA_DSR_BCR_BCR(2*ADC_MAX_SIZE);
+  // load BCR with ADC_MAX_SAMPLES*2 bytes (16-bits) per transfer 
+  DMA0->DMA[0].DSR_BCR |= DMA_DSR_BCR_BCR(2*ADC_MAX_SAMPLES);
   
   // configure the interrupt upon transfer complete, priority 
   NVIC_SetPriority(DMA0_IRQn, 2);

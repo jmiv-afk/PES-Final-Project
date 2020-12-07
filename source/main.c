@@ -2,8 +2,8 @@
  * main.c - Application entry point
  *
  * @author  Jake Michael
- * @date    2020-11-23
- * @rev     1.2
+ * @date    2020-12-07
+ * @rev     1.3
  * -----------------------------------------------------------------------------
  */
 #include <stdio.h>
@@ -17,8 +17,6 @@
 #include "test_dsp_analysis.h"
 #include "dsp_analysis.h"
 #include "tpm_pixl.h"
-
-#define ABS(N) ((N<0)?(-N):(N))
 
 void system_init() {
   // initialize hardware
@@ -38,7 +36,6 @@ void system_init() {
   tpm_pixl_init();
 }
 
-//#define TESTING
 /*
  * @brief   Application entry point.
  */
@@ -47,89 +44,66 @@ int main(void) {
   // initialize the system
   system_init();
 
-#ifdef TESTING
+  // run tests
   test_dsp();
   printf("all tests passed\r\n");
-#else
 
+  uint32_t curr_led_colors[8];
   uint32_t init_led_colors[8] = {
-      0xFF0000, // red
-      0xFF0000, // red
-      0xFF0000, // red
-      0xFF0000, // red
-      0xFF0000, // red
-      0xFF0000, // red
-      0xFF0000, // red
-      0xFF0000  // red
-      };
+      RED,
+      PINK,
+      PURPLE,
+      BLUE,
+      AQUA,
+      GREEN,
+      YELLOW,
+      ORANGE
+  };
   
-  /*
-  uint32_t init_led_colors[8] = {
-      0xFF0000, // red
-      0xFF8000, // orange
-      0xFFFF00, // yellow
-      0x00FF00, // green
-      0x00FFFF, // aqua
-      0x0000FF, // blue
-      0x7F00FF, // purple
-      0xFF00FF  // pink
-      };
-*/
-  uint32_t *curr_led_colors;
-  uint8_t dimmer[8] = {0,0,0,0,0,0,0,0};
-  int thresh = 5;
+  for (int i=0; i<8; i++) {
+    curr_led_colors[i] = init_led_colors[i];
+  }
+
+  int thresh[NUM_PIXELS] = {
+      4, 4, 4, 4, 4, 4, 4, 0
+  };
+
+  uint32_t bucket_indices[] = {
+      0, 2, 4, 6, 10, 15, 20, 30, 255
+  };
 
   uint16_t *samples;
   int16_t *fft_mags;
-
-  fft_peaks *fftpeaks_tmp; 
-  fft_peaks prev;
   fft_peaks curr;
-  
-  tpm_pixl_update(&init_led_colors, NUM_PIXELS);
-  
-  curr_led_colors = init_led_colors;
 
+  // update initial colors:
+  tpm_pixl_update(&curr_led_colors, NUM_PIXELS);
+
+  // main program loop
   while(1) {
 
-    // wait until more samples are available
-    while( !ain_is_adc_samples_avail() ) {;}
-    // get ADC samples from microphone 
-    samples = ain_get_samples();
-    // get fft magsnitude (power spectrum of ADC samples)
-    fft_mags = dsp_fft_mag(samples, 256);
-    // find the peaks 
-    dsp_find_peaks(fft_mags, &prev);
-
-    while(1) {
       // wait until more samples are available
       while( !ain_is_adc_samples_avail() ) {;}
-      // get ADC samples from microphone 
+      // get ADC samples from microphone (also begins new sampling sequence)
       samples = ain_get_samples();
-      // get fft magsnitude (power spectrum of ADC samples)
-      fft_mags = dsp_fft_mag(samples, 256);
-      // find the peaks 
-      dsp_find_peaks(fft_mags, &curr);
-      
+      // get fft magnitude (power spectrum of ADC samples)
+      fft_mags = dsp_fft_mag(samples, 512);
+      // find the peaks, delineate with bucket_indices
+      dsp_find_peaks(fft_mags, &curr, bucket_indices);
+      // loop through pixels
       for (int i=0; i<NUM_PIXELS; i++) {
-        if ( ABS(curr.mags[i] - prev.mags[i]) > thresh && 
-             curr.mags[i] > prev.mags[i] ) {
-          // current peak mags is greater than previous and above threshold
-          dimmer[i] = (dimmer[i]+1);
-        } else if ( ABS(curr.mags[i] - prev.mags[i]) > thresh && 
-            curr.mags[i] < prev.mags[i]) {
-          // current peak mags is less than previous and above threshold
-          dimmer[i] = (dimmer[i]-1);
+        // if the peak magnitude is above some threshold
+        if ( curr.mags[i] > thresh[i])  {
+          curr_led_colors[i] = init_led_colors[i];
+        } else {
+          curr_led_colors[i] = 0x0;
         }
-        curr_led_colors[i] = tpm_pixl_dim(NULL, &init_led_colors[i], dimmer[i]);
-      }
-
-      tpm_pixl_update(&curr_led_colors, NUM_PIXELS);
-      prev = curr;
     }
+    // update the pixels
+    tpm_pixl_update(&curr_led_colors, NUM_PIXELS);
   }
 
   // will never return
   return -1;
-#endif
+
 }

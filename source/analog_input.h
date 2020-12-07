@@ -1,9 +1,11 @@
 /* -----------------------------------------------------------------------------
  * analog_input.h - Interface for sampling ADC0 via DMA0 at ADC_SAMPLING_FREQ  
  *
+ * Single ended 16-bit analog samples are recorded from KL25Z PortC, Pin0 (PTC0) 
+ *
  * @author  Jake Michael
- * @date    
- * @rev     
+ * @date    2020-12-07 
+ * @rev     1.3
  * -----------------------------------------------------------------------------
  */
 
@@ -28,11 +30,10 @@
  * at which point it will be overwritten. 
  *
  * @param  none
- * @return uint16_t*, an ADC sample buffer with length 256 samples 
+ * @return uint16_t*, an ADC sample buffer with length 512 samples 
  *                    NULL if adc samples are not available 
  */
 uint16_t* ain_get_samples();
-
 
 /*
  * @brief   Returns boolean indicating whether samples are available 
@@ -42,7 +43,6 @@ uint16_t* ain_get_samples();
  *                false - samples not available.
  */
 bool ain_is_adc_samples_avail();
-
 
 /*
  * @brief   Initializes ADC0, DMA0, and TPM0 
@@ -83,17 +83,7 @@ void _init_adc0();
 void _init_dma0();
 
 /*
- * @brief   Restarts DMA0 for sampling ADC0 via TPM0 overflow 
- *
- * @param   none
- * @return  none
- */
-void _restart_dma0();
-
-/*
  * @brief   The DMA0 IRQ handler for automatically sampling ADC0 
- *
- * A new sequence of samples will be gathered unless the adc is suspended.
  *
  * @param   none
  * @return  none
