@@ -42,6 +42,9 @@ The one hardware technology in the KL25Z that really made this project responsiv
 
 For the analog sampling, DMA0 is triggered by TPM0 overflow at a 48 kHz sampling rate and the samples are placed in the background ping-pong buffer (while the main loop is computing FFT of previous samples in the active ping-pong buffer and generating the LED output buffer). Once the LED output buffer is computed, DMA1 is initiated by TPM1 overflow to update the pulse widths for the neopixel bitstream. This all means that the processor doesn't have to spend time polling the ADC or bit-banging a GPIO line and can be reserved for computationally challenging tasks such as the FFT.
 
+#### Linking the CMSIS DSP Library ####
+I had to configure some settings so that the linker could locate the CMSIS pre-compiled binaries. Since I am working with MCUXpresso, I followed along with this [guide by NXP](https://community.nxp.com/t5/MCUXpresso-General-Knowledge/Using-CMSIS-DSP-with-MCUXpresso-SDK-and-IDE/ta-p/1129232) on how to use the CMSIS DSP with their SDK. If you are getting a linker error while compiling this project, make sure you set the filepaths correctly according to the guide.
+
 #### Testing ####
 Although I used an external CMSIS library for the FFT, it was important to verify that the library was working as expected. I used Python to compute and compare results between the FFT output in C and an FFT of the same dataset in Python. There is a Jupyter Notebook [DSP_Validation.ipynb](DSP_Validation.ipynb) that accompanies this documentation which walks through the DSP validation of the CMSIS FFT. This notebook also includes the code that generates the Hanning window that gets applied to the samples before computing the FFT. 
 
